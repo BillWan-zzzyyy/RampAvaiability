@@ -1,7 +1,7 @@
 name: Probe lot-occupancy page
 
 # Development helper: the page is unreachable from the dev sandbox, so the runner
-# fetches it, commits the HTML as a test fixture, and prints its structure to the log.
+# renders it, commits the HTML as a test fixture, and prints its structure to the log.
 # Runs on push to the dev branch because workflow_dispatch is only available for
 # workflows that already exist on the default branch.
 on:
@@ -9,6 +9,7 @@ on:
     branches: [claude/parking-lot-scraper-t7lzxw]
     paths:
       - tools/probe.py
+      - scraper/fetch.py
       - .github/workflows/probe.yml
   workflow_dispatch:
 
@@ -24,11 +25,18 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
 
-      - name: Fetch page and describe structure
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          python -m playwright install --with-deps chromium
+
+      - name: Render page and describe structure
         run: python tools/probe.py
 
       - name: Commit fixture
+        if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

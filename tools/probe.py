@@ -1,40 +1,22 @@
 """One-off diagnostic: fetch the UW lot-occupancy page and describe its structure.
 
-Run on a GitHub Actions runner (the dev sandbox cannot reach the host). It tries a
-few request styles, reports status/headers/body size for each, saves the best HTML as
-a test fixture, and prints enough structure to the job log to decide how the occupancy
-numbers should be parsed: inline HTML, an iframe, or a JSON endpoint the page calls.
+Run on a GitHub Actions runner (the dev sandbox cannot reach the host). It renders
+the page with the real fetcher (headless Chromium, because the site is behind an AWS
+WAF challenge), saves the HTML as a test fixture, and prints enough structure to the
+job log to decide how the occupancy numbers should be parsed.
 """
 
 from __future__ import annotations
 
-import gzip
 import pathlib
 import re
-import ssl
 import sys
-import urllib.error
-import urllib.request
-import zlib
 
-URL = "https://transportation.wisc.edu/parking-lots/lot-occupancy-count/"
-UA = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
-)
-BROWSER_HEADERS = {
-    "User-Agent": UA,
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,"
-    "image/webp,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.9",
-    "Accept-Encoding": "gzip, deflate",
-    "Connection": "keep-alive",
-    "Upgrade-Insecure-Requests": "1",
-    "Sec-Fetch-Dest": "document",
-    "Sec-Fetch-Mode": "navigate",
-    "Sec-Fetch-Site": "none",
-    "Sec-Fetch-User": "?1",
-}
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
+
+from scraper import config  # noqa: E402
+from scraper.fetch import fetch_html  # noqa: E402
+
 FIXTURE = pathlib.Path("tests/fixtures/lot_occupancy.html")
 KEYWORDS = ("occupancy", "stall", "available", "space", "vacan", "lot", "ramp", "count")
 
@@ -43,54 +25,17 @@ def section(title: str) -> None:
     print(f"\n{'=' * 70}\n{title}\n{'=' * 70}", flush=True)
 
 
-def decode(raw: bytes, encoding: str) -> str:
-    if encoding == "gzip":
-        raw = gzip.decompress(raw)
-    elif encoding == "deflate":
-        raw = zlib.decompress(raw, -zlib.MAX_WBITS)
-    return raw.decode("utf-8", errors="replace")
-
-
-def attempt(label: str, url: str, headers: dict[str, str]) -> str:
-    """Fetch one way, report everything about the response, return the body."""
-    section(f"ATTEMPT: {label}")
-    print(f"GET {url}")
-    print(f"headers: {sorted(headers)}")
-    req = urllib.request.Request(url, headers=headers)
-    ctx = ssl.create_default_context()
-    try:
-        with urllib.request.urlopen(req, timeout=60, context=ctx) as resp:
-            raw = resp.read()
-            body = decode(raw, (resp.headers.get("Content-Encoding") or "").lower())
-            print(f"status: {resp.status}")
-            print(f"final url: {resp.geturl()}")
-            print(f"raw bytes: {len(raw)}  decoded chars: {len(body)}")
-            print("--- response headers ---")
-            for k, v in resp.headers.items():
-                print(f"{k}: {v}")
-            if body:
-                print("--- first 500 chars ---")
-                print(body[:500])
-            return body
-    except urllib.error.HTTPError as exc:  # noqa: PERF203 - diagnostics
-        raw = exc.read()
-        print(f"HTTPError {exc.code}: {exc.reason}, {len(raw)} bytes")
-        print("--- response headers ---")
-        for k, v in (exc.headers or {}).items():
-            print(f"{k}: {v}")
-        print(raw[:1000].decode("utf-8", errors="replace"))
-    except Exception as exc:  # noqa: BLE001 - diagnostics
-        print(f"{type(exc).__name__}: {exc}")
-    return ""
-
-
 def describe(html: str) -> None:
+    section("TITLE")
+    m = re.search(r"<title[^>]*>(.*?)</title>", html, re.S | re.I)
+    print(m.group(1).strip() if m else "(no title)")
+
     section("TABLES")
     tables = re.findall(r"<table\b.*?</table>", html, re.S | re.I)
     print(f"{len(tables)} table(s) found")
     for i, table in enumerate(tables):
-        print(f"\n--- table[{i}] ({len(table)} chars, first 3000) ---")
-        print(table[:3000])
+        print(f"\n--- table[{i}] ({len(table)} chars, first 4000) ---")
+        print(table[:4000])
 
     section("IFRAMES")
     for m in re.finditer(r"<iframe\b[^>]*>", html, re.I):
@@ -109,33 +54,33 @@ def describe(html: str) -> None:
             print(body[:2000])
 
     section("LINES MENTIONING ramp / stall / available / occupanc")
+    seen = 0
     for line in html.splitlines():
         stripped = line.strip()
         if re.search(r"ramp|stall|available|occupanc", stripped, re.I):
             print(stripped[:400])
+            seen += 1
+            if seen > 200:
+                print("... (truncated)")
+                break
 
 
 def main() -> int:
-    bodies: list[tuple[str, str]] = []
+    section(f"RENDERING {config.SOURCE_URL}")
+    html = fetch_html()
+    print(f"got {len(html)} chars")
 
-    bodies.append(("bare UA", attempt("bare User-Agent only", URL, {"User-Agent": UA})))
-    bodies.append(("browser headers", attempt("full browser headers", URL, BROWSER_HEADERS)))
-    bodies.append(("site root", attempt("site root (reachability check)",
-                                        "https://transportation.wisc.edu/", BROWSER_HEADERS)))
-
-    label, html = max(bodies, key=lambda pair: len(pair[1]))
-    section(f"BEST RESPONSE: {label} ({len(html)} chars)")
-
-    # Only keep a fixture for the target page, never the site root.
-    target = next((b for lbl, b in bodies if lbl != "site root" and b), "")
     FIXTURE.parent.mkdir(parents=True, exist_ok=True)
-    FIXTURE.write_text(target, encoding="utf-8")
-    print(f"wrote {len(target)} chars to {FIXTURE}")
+    FIXTURE.write_text(html, encoding="utf-8")
+    print(f"wrote fixture -> {FIXTURE}")
 
-    if target:
-        describe(target)
-    else:
-        print("\nTarget page returned an empty body in every attempt.")
+    describe(html)
+
+    section("robots.txt")
+    try:
+        print(fetch_html("https://transportation.wisc.edu/robots.txt")[:2000])
+    except Exception as exc:  # noqa: BLE001 - diagnostics only
+        print(f"could not read robots.txt: {exc}")
 
     return 0
 
