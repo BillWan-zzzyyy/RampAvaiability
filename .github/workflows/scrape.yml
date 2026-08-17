@@ -1,0 +1,100 @@
+name: Parking availability report
+
+on:
+  # GitHub cron is UTC-only. 13:00-22:00 UTC covers 8am-4pm America/Chicago in
+  # both CDT (UTC-5) and CST (UTC-6); scraper/main.py decides in local time which
+  # of those hours actually belong to the reporting window, so daylight saving
+  # never needs a cron edit.
+  schedule:
+    - cron: "0 13-22 * * 1-5"
+
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Scrape and record but send no email"
+        type: boolean
+        default: false
+      force:
+        description: "Run even outside the weekday 8am-4pm window"
+        type: boolean
+        default: true
+      force_chart:
+        description: "Include the Ramp 17 chart as if this were the 4pm run"
+        type: boolean
+        default: false
+
+  # Development only: pushes to the working branch do a dry run so the scraper
+  # can be exercised end-to-end before the workflow lands on the default branch.
+  push:
+    branches: [claude/parking-lot-scraper-t7lzxw]
+    paths:
+      - "scraper/**"
+      - requirements.txt
+      - .github/workflows/scrape.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: parking-scrape
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Cache Chromium
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          python -m playwright install --with-deps chromium
+
+      - name: Scrape and send report
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+        run: |
+          ARGS=""
+          if [ "${{ github.event_name }}" = "push" ]; then
+            ARGS="--dry-run --force"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ "${{ inputs.dry_run }}" = "true" ]; then ARGS="$ARGS --dry-run"; fi
+            if [ "${{ inputs.force }}" = "true" ]; then ARGS="$ARGS --force"; fi
+            if [ "${{ inputs.force_chart }}" = "true" ]; then ARGS="$ARGS --force-chart"; fi
+          fi
+          echo "running: python -m scraper.main $ARGS"
+          python -m scraper.main $ARGS
+
+      - name: Commit today's readings
+        # Dev pushes would otherwise litter the history with off-schedule rows.
+        if: github.event_name != 'push'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data
+          if git diff --cached --quiet; then
+            echo "nothing new to record"
+            exit 0
+          fi
+          git commit -m "data: parking availability $(date -u +%Y-%m-%dT%H:%MZ)"
+          for attempt in 1 2 3 4; do
+            if git push origin HEAD:${GITHUB_REF_NAME}; then exit 0; fi
+            echo "push failed, rebasing and retrying ($attempt)"
+            git pull --rebase origin ${GITHUB_REF_NAME} || true
+            sleep $((2 ** attempt))
+          done
+          echo "could not push readings" >&2
+          exit 1

@@ -19,6 +19,7 @@ class LotRecord:
     name: str
     available: int | None
     total: int | None = None
+    region: str = ""
 
     @property
     def is_full(self) -> bool:

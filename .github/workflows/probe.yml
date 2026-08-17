@@ -1,16 +1,9 @@
 name: Probe lot-occupancy page
 
-# Development helper: the page is unreachable from the dev sandbox, so the runner
-# renders it, commits the HTML as a test fixture, and prints its structure to the log.
-# Runs on push to the dev branch because workflow_dispatch is only available for
-# workflows that already exist on the default branch.
+# Maintenance helper, run by hand: re-captures the page as tests/fixtures/
+# lot_occupancy.html and prints its structure to the job log. Use it when the
+# parser starts failing, to see what the site changed before editing parse.py.
 on:
-  push:
-    branches: [claude/parking-lot-scraper-t7lzxw]
-    paths:
-      - tools/probe.py
-      - scraper/fetch.py
-      - .github/workflows/probe.yml
   workflow_dispatch:
 
 permissions:
