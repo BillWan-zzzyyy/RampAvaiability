@@ -66,8 +66,14 @@ cron 只能用 UTC。芝加哥夏令时 UTC−5、冬令时 UTC−6，所以 cro
 ### 数据
 
 每次运行往 `data/YYYY-MM-DD.csv` 追加一轮读数（`timestamp_local, lot_id, name,
-available, total, region`）并提交回仓库。4pm 那次直接读当天 CSV 画图，
+available, total, region, raw_status`）并提交回仓库。4pm 那次直接读当天 CSV 画图，
 所以图表数据和邮件数据永远一致，历史也留得下来。
+
+网站有时不给数字而给文字（已实测到 `006U H.C. White Garage upper` 显示 **FULL**）：
+
+- `FULL` → 记为 **0**，状态显示"已满"。这是最该让你知道的情况，绝不能当成"未知"糊弄过去。
+- `CLOSED` / 其他无法识别的文字 → 记为**未知**，邮件里原样显示网站的用词，不进曲线图，
+  也绝不猜一个数字。
 
 ---
 
