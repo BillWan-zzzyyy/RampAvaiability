@@ -107,12 +107,15 @@ def _rows_to_records(table: Tag, columns: dict[str, int]) -> list[LotRecord]:
             else ""
         )
 
+        raw_availability = cells[columns["availability"]].get_text(" ", strip=True)
+        available = _to_available(raw_availability)
         records.append(
             LotRecord(
                 lot_id=lot_id,
                 name=name,
-                available=_to_available(cells[columns["availability"]].get_text(" ", strip=True)),
+                available=available,
                 region=region,
+                raw_status="" if _is_plain_count(raw_availability) else raw_availability,
             )
         )
     return records
@@ -130,17 +133,27 @@ def _split_lot_name(raw: str) -> tuple[str, str]:
     return normalize_lot_id(match.group(1)), raw
 
 
-def _to_available(text: str) -> int | None:
-    """Numeric stall count, or None for FULL / CLOSED / anything unreadable.
+def _is_plain_count(text: str) -> bool:
+    return bool(re.fullmatch(r"\d[\d,]*", text.strip()))
 
-    Returning None keeps an unknown out of the charts and makes the email say
-    "unknown" rather than print a number the site never published.
+
+def _to_available(text: str) -> int | None:
+    """Stall count, or None when the site published no usable number.
+
+    "FULL" is a count, not an unknown — it means zero, and reporting it as
+    unknown would hide exactly the situation worth knowing about. "CLOSED" and
+    anything unrecognized stay None, which keeps them out of the chart and makes
+    the email say what the source said instead of inventing a number.
     """
-    match = re.search(r"-?\d+", text.replace(",", ""))
-    if not match:
+    cleaned = text.strip()
+    if _is_plain_count(cleaned):
+        return int(cleaned.replace(",", ""))
+    if re.search(r"\bfull\b", cleaned, re.I):
+        return 0
+    if re.search(r"closed|unavailable|n/?a", cleaned, re.I):
         return None
-    value = int(match.group())
-    return value if value >= 0 else None
+    match = re.search(r"\d[\d,]*", cleaned)
+    return int(match.group().replace(",", "")) if match else None
 
 
 def _matches(text: str, hints: tuple[str, ...]) -> bool:

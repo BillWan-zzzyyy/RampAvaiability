@@ -43,10 +43,11 @@ def find_focus(records: Sequence[LotRecord]) -> LotRecord | None:
     return None
 
 
-def status_of(available: int | None) -> tuple[str, str]:
+def status_of(available: int | None, raw_status: str = "") -> tuple[str, str]:
     """(label, color) for a stall count."""
     if available is None:
-        return "未知", INK_MUTED
+        # Show whatever the site published ("CLOSED", ...) rather than a bare dash.
+        return (raw_status or "未知"), INK_MUTED
     if available == 0:
         return "已满", CRITICAL
     if available < LOW:
@@ -77,8 +78,8 @@ def build_html(
     )
 
     if focus is not None:
-        label, color = status_of(focus.available)
-        value = "未知" if focus.available is None else str(focus.available)
+        label, color = status_of(focus.available, focus.raw_status)
+        value = (focus.raw_status or "未知") if focus.available is None else str(focus.available)
         parts.append(
             f'<div style="margin:14px 0 22px">'
             f'<div style="font-size:13px;color:{INK_SECONDARY}">'
@@ -138,11 +139,11 @@ def _records_table(records: Sequence[LotRecord]) -> str:
         key=lambda r: (r.lot_id != config.FOCUS_LOT, -(r.available or 0)),
     )
     for rec in ordered:
-        label, color = status_of(rec.available)
+        label, color = status_of(rec.available, rec.raw_status)
         is_focus = rec.lot_id == config.FOCUS_LOT
         weight = "700" if is_focus else "400"
         background = "#eef4fd" if is_focus else "transparent"
-        value = "—" if rec.available is None else str(rec.available)
+        value = (rec.raw_status or "—") if rec.available is None else str(rec.available)
         rows.append(
             f'<tr style="background:{background}">'
             f'<td style="padding:6px 8px;border-bottom:1px solid {GRIDLINE};'

@@ -77,19 +77,44 @@ def test_column_order_is_read_from_headers_not_positions():
     assert (record.lot_id, record.available, record.region) == ("17", 42, "South")
 
 
-def test_unreadable_count_becomes_unknown_not_zero():
-    html = """
+def _one_column_table(*availability_cells: str) -> str:
+    rows = "".join(
+        f"<tr><td>{cell}</td><td>017 Engineering Drive Ramp</td></tr>"
+        for cell in availability_cells
+    )
+    return f"""
     <table>
       <thead><tr>
         <th class="column-availability">Availability</th>
         <th class="column-garageramp">Garage/Ramp</th>
       </tr></thead>
-      <tbody>
-        <tr><td>FULL</td><td>017 Engineering Drive Ramp</td></tr>
-        <tr><td>0</td><td>080 Union South Garage</td></tr>
-      </tbody>
+      <tbody>{rows}</tbody>
     </table>
     """
-    full, zero = parse_lots(html)
-    assert full.available is None
+
+
+def test_full_means_zero_not_unknown():
+    """The site publishes text for some decks; FULL is the case worth knowing."""
+    full, lower, zero = parse_lots(_one_column_table("FULL", "Full", "0"))
+    assert full.available == 0
+    assert lower.available == 0
     assert zero.available == 0
+    assert full.raw_status == "FULL"
+    assert zero.raw_status == ""  # a plain number carries no status text
+
+
+def test_closed_stays_unknown_and_keeps_the_site_wording():
+    (closed,) = parse_lots(_one_column_table("CLOSED"))
+    assert closed.available is None
+    assert closed.raw_status == "CLOSED"
+
+
+def test_thousands_separator_is_read_as_one_number():
+    (record,) = parse_lots(_one_column_table("1,027"))
+    assert record.available == 1027
+
+
+def test_unrecognized_text_without_digits_is_unknown():
+    (record,) = parse_lots(_one_column_table("temporarily unavailable"))
+    assert record.available is None
+    assert record.raw_status == "temporarily unavailable"

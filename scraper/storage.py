@@ -15,7 +15,7 @@ from collections.abc import Iterable, Sequence
 from . import config
 from .models import LotRecord, Sample
 
-HEADER = ["timestamp_local", "lot_id", "name", "available", "total", "region"]
+HEADER = ["timestamp_local", "lot_id", "name", "available", "total", "region", "raw_status"]
 
 
 def csv_path(day: dt.date, data_dir: pathlib.Path | None = None) -> pathlib.Path:
@@ -44,6 +44,7 @@ def append(
                     "" if rec.available is None else rec.available,
                     "" if rec.total is None else rec.total,
                     rec.region,
+                    rec.raw_status,
                 ]
             )
     return path
@@ -71,6 +72,7 @@ def load_day(day: dt.date, data_dir: pathlib.Path | None = None) -> list[Sample]
                         available=_to_int(row.get("available")),
                         total=_to_int(row.get("total")),
                         region=row.get("region") or "",
+                        raw_status=row.get("raw_status") or "",
                     ),
                 )
             )

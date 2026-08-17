@@ -20,6 +20,10 @@ class LotRecord:
     available: int | None
     total: int | None = None
     region: str = ""
+    # The cell text when the site published something other than a plain number
+    # ("FULL", "CLOSED", ...). Kept verbatim so the report can show what the
+    # source actually said instead of a bare dash.
+    raw_status: str = ""
 
     @property
     def is_full(self) -> bool:

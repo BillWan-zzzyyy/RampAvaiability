@@ -50,6 +50,8 @@ def summarize(records: Sequence[LotRecord]) -> str:
     lines = [f"{len(records)} lot(s):"]
     for rec in records:
         value = "unknown" if rec.available is None else str(rec.available)
+        if rec.raw_status:
+            value += f" (site said {rec.raw_status!r})"
         marker = " <- focus" if rec.lot_id == config.FOCUS_LOT else ""
         lines.append(f"  [{rec.lot_id:>4}] {rec.name}: {value}{marker}")
     return "\n".join(lines)

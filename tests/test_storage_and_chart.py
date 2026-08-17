@@ -19,7 +19,13 @@ def at(hour: int) -> dt.datetime:
 def test_append_and_read_back(tmp_path):
     records = [
         LotRecord(lot_id="17", name="017 Engineering Drive Ramp", available=546, region="South"),
-        LotRecord(lot_id="6L", name="006L H.C. White Garage lower", available=None, region="East"),
+        LotRecord(
+            lot_id="6L",
+            name="006L H.C. White Garage lower",
+            available=None,
+            region="East",
+            raw_status="CLOSED",
+        ),
     ]
     storage.append(records, at(8), data_dir=tmp_path)
     storage.append(records, at(9), data_dir=tmp_path)
@@ -28,6 +34,7 @@ def test_append_and_read_back(tmp_path):
     assert len(samples) == 4
     assert samples[0].record.name == "017 Engineering Drive Ramp"
     assert samples[1].record.available is None  # unknown survives the round trip
+    assert samples[1].record.raw_status == "CLOSED"  # and so does what the site said
     assert samples[0].record.region == "South"
 
 
