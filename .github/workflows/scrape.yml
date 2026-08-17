@@ -42,6 +42,9 @@ concurrency:
 jobs:
   report:
     runs-on: ubuntu-latest
+    # A wedged step must not sit burning Actions minutes until the 6h default;
+    # this job normally finishes in about two minutes.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -56,10 +59,21 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
 
-      - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
-          python -m playwright install --with-deps chromium
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      # --with-deps shells out to apt, which on a runner with a held dpkg lock
+      # can hang for many minutes. Cap it and fall back to the browser binary
+      # alone, since the runner image already carries the shared libraries.
+      - name: Install Chromium with system libraries
+        id: browser_with_deps
+        continue-on-error: true
+        timeout-minutes: 6
+        run: python -m playwright install --with-deps chromium
+
+      - name: Install Chromium without apt
+        if: steps.browser_with_deps.outcome != 'success'
+        run: python -m playwright install chromium
 
       - name: Scrape and send report
         env:
@@ -84,7 +98,9 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data
+          # A run outside the local window writes nothing, and an absent data/
+          # directory is not a failure.
+          git add data 2>/dev/null || true
           if git diff --cached --quiet; then
             echo "nothing new to record"
             exit 0
