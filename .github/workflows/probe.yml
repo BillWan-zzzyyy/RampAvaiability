@@ -1,0 +1,42 @@
+name: Probe lot-occupancy page
+
+# Maintenance helper, run by hand: re-captures the page as tests/fixtures/
+# lot_occupancy.html and prints its structure to the job log. Use it when the
+# parser starts failing, to see what the site changed before editing parse.py.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          python -m playwright install --with-deps chromium
+
+      - name: Render page and describe structure
+        run: python tools/probe.py
+
+      - name: Commit fixture
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f tests/fixtures/lot_occupancy.html
+          if git diff --cached --quiet; then
+            echo "fixture unchanged"
+          else
+            git commit -m "chore: capture lot-occupancy page fixture from runner"
+            git push origin HEAD:${GITHUB_REF_NAME}
+          fi

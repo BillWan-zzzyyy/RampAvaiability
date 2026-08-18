@@ -1,0 +1,5 @@
+# The source site is behind an AWS WAF JS challenge, so the page has to be
+# rendered by a real browser engine rather than fetched with requests.
+playwright==1.49.1
+beautifulsoup4==4.12.3
+matplotlib==3.9.2
