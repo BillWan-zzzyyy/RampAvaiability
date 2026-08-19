@@ -32,7 +32,12 @@ class LotRecord:
 
 @dataclass(frozen=True)
 class Sample:
-    """A LotRecord stamped with the campus-local time it was observed."""
+    """A LotRecord stamped with when it was observed and which slot it reports on.
+
+    ``observed_at`` is the real scrape time; ``slot`` is the hour the reading is
+    filed under (see scraper/schedule.py). They differ by up to half an hour.
+    """
 
     observed_at: dt.datetime
     record: LotRecord
+    slot: dt.datetime | None = None

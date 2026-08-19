@@ -1,9 +1,14 @@
 """Entry point: scrape once, record the result, and email the report.
 
 Scheduling note: GitHub cron is UTC-only, so the workflow fires every hour across
-a window wide enough to cover both US Central offsets and this module decides,
-in campus local time, whether the run belongs to the 8am–4pm reporting window.
+a window wide enough to cover both US Central offsets, and this module decides in
+campus local time whether the run belongs to the 8am-4pm reporting window.
 Daylight saving then needs no cron edit.
+
+The workflow also fires at :41 of the previous hour rather than on the hour,
+because GitHub's scheduler runs 11-36 minutes late on the free tier. Which hour
+a run reports on is therefore its slot (nearest hour), not its clock hour —
+see scraper/schedule.py.
 """
 
 from __future__ import annotations
@@ -13,7 +18,7 @@ import datetime as dt
 import sys
 from collections.abc import Sequence
 
-from . import chart, config, mailer, report, storage
+from . import chart, config, mailer, report, schedule, storage
 from .fetch import FetchError, fetch_html
 from .models import LotRecord
 from .parse import ParseError, parse_lots
@@ -39,13 +44,6 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def in_window(now: dt.datetime) -> bool:
-    return (
-        now.weekday() < 5  # Monday=0 .. Friday=4
-        and config.FIRST_HOUR <= now.hour <= config.LAST_HOUR
-    )
-
-
 def summarize(records: Sequence[LotRecord]) -> str:
     lines = [f"{len(records)} lot(s):"]
     for rec in records:
@@ -60,9 +58,11 @@ def summarize(records: Sequence[LotRecord]) -> str:
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
     now = dt.datetime.now(config.TIMEZONE)
+    slot = schedule.slot_for(now)
     print(f"local time: {now:%Y-%m-%d %H:%M:%S %Z} (weekday {now.weekday()})")
+    print(f"reporting slot: {slot:%Y-%m-%d %H:00} (scheduler drift {now - slot})")
 
-    if not args.force and not in_window(now):
+    if not args.force and not schedule.in_window(now):
         print(
             f"outside the reporting window "
             f"(Mon-Fri {config.FIRST_HOUR}:00-{config.LAST_HOUR}:00 local); nothing to do"
@@ -80,22 +80,22 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     print(summarize(records))
 
-    path = storage.append(records, now)
+    path = storage.append(records, now, slot=slot)
     print(f"recorded -> {path}")
 
-    is_final = args.force_chart or now.hour >= config.LAST_HOUR
+    is_final = args.force_chart or schedule.is_final(now)
     chart_png: bytes | None = None
     chart_cid: str | None = None
     series: list[tuple[dt.datetime, int]] = []
 
     if is_final:
-        series = storage.series_for_lot(now.date(), config.FOCUS_LOT)
+        series = storage.series_for_lot(slot.date(), config.FOCUS_LOT)
         focus = report.find_focus(records)
         if series:
             chart_png = chart.render_trend(
                 series,
                 lot_name=focus.name if focus else f"Lot {config.FOCUS_LOT}",
-                day=now.date(),
+                day=slot.date(),
                 first_hour=config.FIRST_HOUR,
                 last_hour=config.LAST_HOUR,
             )
@@ -104,7 +104,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             print(f"no recorded points for lot {config.FOCUS_LOT} today; sending without chart")
 
-    subject = report.subject(records, now, is_final)
+    subject = report.subject(records, slot, is_final)
     body = report.build_html(
         records,
         now,
