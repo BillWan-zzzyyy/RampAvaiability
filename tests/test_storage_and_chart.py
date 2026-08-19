@@ -54,15 +54,48 @@ def test_series_skips_unknowns_and_other_lots(tmp_path):
     assert [(t.hour, v) for t, v in series] == [(8, 500), (10, 120)]
 
 
-def test_retried_hour_keeps_the_latest_sample(tmp_path):
+def test_retried_slot_keeps_the_latest_sample(tmp_path):
+    """A run retried 17 minutes later is still the same report, so it overwrites.
+
+    (8:41 would NOT belong here — that rounds to the 9am slot, which is exactly
+    the 9am cron firing on time.)
+    """
     storage.append([LotRecord(lot_id="17", name="Ramp 17", available=500)], at(8), tmp_path)
     storage.append(
         [LotRecord(lot_id="17", name="Ramp 17", available=480)],
-        dt.datetime(2026, 8, 17, 8, 41, tzinfo=TZ),
+        dt.datetime(2026, 8, 17, 8, 20, tzinfo=TZ),
         data_dir=tmp_path,
     )
     assert storage.series_for_lot(DAY, "17", data_dir=tmp_path) == [
         (dt.datetime(2026, 8, 17, 8, 0, tzinfo=TZ), 480)
+    ]
+
+
+def test_slot_keeps_an_early_run_in_the_hour_it_reports_on(tmp_path):
+    """7:52 and 8:17 runs both belong to the 8am slot, not 7am and 8am."""
+    early = dt.datetime(2026, 8, 17, 7, 52, tzinfo=TZ)
+    late = dt.datetime(2026, 8, 17, 8, 17, tzinfo=TZ)
+    storage.append([LotRecord(lot_id="17", name="Ramp 17", available=600)], early, tmp_path)
+    storage.append([LotRecord(lot_id="17", name="Ramp 17", available=410)], late, tmp_path)
+
+    series = storage.series_for_lot(DAY, "17", data_dir=tmp_path)
+    assert [(t.hour, v) for t, v in series] == [(8, 410)]  # same slot, later wins
+
+
+def test_old_csv_without_a_slot_column_still_loads(tmp_path):
+    """Three days of history predate slots; deriving the slot keeps them readable."""
+    legacy = tmp_path / "2026-08-17.csv"
+    legacy.write_text(
+        "timestamp_local,lot_id,name,available,total,region,raw_status\n"
+        "2026-08-17T08:03:00-05:00,17,017 Engineering Drive Ramp,546,,South,\n"
+        "2026-08-17T09:02:00-05:00,17,017 Engineering Drive Ramp,410,,South,\n",
+        encoding="utf-8",
+    )
+    samples = storage.load_day(DAY, data_dir=tmp_path)
+    assert [s.slot.hour for s in samples] == [8, 9]
+    assert [(t.hour, v) for t, v in storage.series_for_lot(DAY, "17", tmp_path)] == [
+        (8, 546),
+        (9, 410),
     ]
 
 

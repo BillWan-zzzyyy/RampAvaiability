@@ -26,9 +26,13 @@ LOW = 20
 TIGHT = 60
 
 
-def subject(records: Sequence[LotRecord], observed_at: dt.datetime, is_final: bool) -> str:
+def subject(records: Sequence[LotRecord], slot: dt.datetime, is_final: bool) -> str:
+    """Subject line, labelled with the reporting slot rather than the scrape time.
+
+    A run that fires at 7:52 is the 8am report, and the subject must say 8am.
+    """
     focus = find_focus(records)
-    when = f"{observed_at:%-m/%-d %-I%p}".replace("AM", "am").replace("PM", "pm")
+    when = f"{slot:%-m/%-d %-I%p}".replace("AM", "am").replace("PM", "pm")
     if focus is None or focus.available is None:
         head = "车位播报"
     else:

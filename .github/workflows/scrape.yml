@@ -1,12 +1,18 @@
 name: Parking availability report
 
 on:
-  # GitHub cron is UTC-only. 13:00-22:00 UTC covers 8am-4pm America/Chicago in
-  # both CDT (UTC-5) and CST (UTC-6); scraper/main.py decides in local time which
-  # of those hours actually belong to the reporting window, so daylight saving
-  # never needs a cron edit.
+  # Fires at :41 of the hour BEFORE each target hour, on purpose. GitHub's
+  # scheduler is 11-36 minutes late (measured over 17 runs, avg 20) because :00
+  # is the most contended minute on the platform, so leaving 19 minutes of head
+  # start lands the run near the top of the target hour instead of 20 past it.
+  # Each run files itself under the nearest hour (its "slot"), so whether it
+  # executes at 7:52 or 8:17 it is still the 8am report — see scraper/schedule.py.
+  #
+  # 12:41-21:41 UTC covers 8am-4pm America/Chicago in both CDT (UTC-5) and CST
+  # (UTC-6); main.py drops the runs whose slot falls outside the window, leaving
+  # exactly 9 reports a day in either season, with no cron edit at daylight saving.
   schedule:
-    - cron: "0 13-22 * * 1-5"
+    - cron: "41 12-21 * * 1-5"
 
   workflow_dispatch:
     inputs:
