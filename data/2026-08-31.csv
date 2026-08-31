@@ -1,0 +1,15 @@
+timestamp_local,slot_local,lot_id,name,available,total,region,raw_status
+2026-08-31T14:13:54-05:00,2026-08-31T14:00:00-05:00,20,020 University Avenue Ramp,5,,Central,
+2026-08-31T14:13:54-05:00,2026-08-31T14:00:00-05:00,27,027 Nancy Nicholas Hall Garage,3,,Central,
+2026-08-31T14:13:54-05:00,2026-08-31T14:00:00-05:00,36,036 Observatory Drive Ramp,50,,Central,
+2026-08-31T14:13:54-05:00,2026-08-31T14:00:00-05:00,67,067 Linden Drive Ramp,84,,Central,
+2026-08-31T14:13:54-05:00,2026-08-31T14:00:00-05:00,6L,006L H.C. White Garage lower,0,,East,FULL
+2026-08-31T14:13:54-05:00,2026-08-31T14:00:00-05:00,6U,006U H.C. White Garage upper,5,,East,
+2026-08-31T14:13:54-05:00,2026-08-31T14:00:00-05:00,7,007 Grainger Hall Garage,50,,East,
+2026-08-31T14:13:54-05:00,2026-08-31T14:00:00-05:00,29,029 N Park Street Ramp,39,,East,
+2026-08-31T14:13:54-05:00,2026-08-31T14:00:00-05:00,46,046 Lake & Johnson Ramp,146,,East,
+2026-08-31T14:13:54-05:00,2026-08-31T14:00:00-05:00,83,083 Fluno Center Garage,37,,East,
+2026-08-31T14:13:54-05:00,2026-08-31T14:00:00-05:00,17,017 Engineering Drive Ramp,31,,South,
+2026-08-31T14:13:54-05:00,2026-08-31T14:00:00-05:00,80,080 Union South Garage,11,,South,
+2026-08-31T14:13:54-05:00,2026-08-31T14:00:00-05:00,63,063 Children's Hospital Garage,0,,West,FULL
+2026-08-31T14:13:54-05:00,2026-08-31T14:00:00-05:00,76,076 University Bay Drive Ramp,79,,West,
