@@ -1,9 +1,8 @@
 """Which reporting slot a run belongs to.
 
-GitHub's cron scheduler is late by a measured 11-36 minutes (avg 20) on the
-free tier, because ``:00`` is the most contended minute on the platform. The
-workflow therefore fires at :41 of the *previous* hour so that the delay lands
-the run near the top of the target hour instead of 20 minutes past it.
+GitHub's cron scheduler is unreliable on the free tier: measured on this repo it
+arrives 12 to 201 minutes late and drops most firings outright. The workflow
+therefore fires three times an hour and the first arrival for a slot claims it.
 
 That makes "which hour is this run reporting on?" a separate question from
 "what time is it right now": a run that starts at 7:52 is the 8am report. The

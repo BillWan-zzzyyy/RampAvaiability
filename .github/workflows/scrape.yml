@@ -1,18 +1,21 @@
 name: Parking availability report
 
 on:
-  # Fires at :41 of the hour BEFORE each target hour, on purpose. GitHub's
-  # scheduler is 11-36 minutes late (measured over 17 runs, avg 20) because :00
-  # is the most contended minute on the platform, so leaving 19 minutes of head
-  # start lands the run near the top of the target hour instead of 20 past it.
-  # Each run files itself under the nearest hour (its "slot"), so whether it
-  # executes at 7:52 or 8:17 it is still the 8am report — see scraper/schedule.py.
+  # Deliberately redundant: three firings an hour, because GitHub drops
+  # scheduled runs. Measured on this repo: 10/10 firings a day through Aug 25,
+  # then 6, 1, 1, 2, 3 on the following weekdays, with delays up to 201 minutes.
+  # A single firing per hour is therefore not something to rely on.
   #
-  # 12:41-21:41 UTC covers 8am-4pm America/Chicago in both CDT (UTC-5) and CST
-  # (UTC-6); main.py drops the runs whose slot falls outside the window, leaving
-  # exactly 9 reports a day in either season, with no cron edit at daylight saving.
+  # Whichever firing arrives first records its slot and emails; the rest find the
+  # slot already recorded and exit in seconds without touching the source site
+  # (scraper/precheck.py). Real work stays at 9 reports a day.
+  #
+  # 11:00-22:59 UTC spans 8am-4pm America/Chicago in both CDT (UTC-5) and CST
+  # (UTC-6), with the early hours giving the 8am slot several chances to land
+  # before the deadline; anything whose slot falls outside the window is dropped
+  # in local time, so daylight saving still needs no cron edit.
   schedule:
-    - cron: "41 12-21 * * 1-5"
+    - cron: "5,25,45 11-22 * * 1-5"
 
   workflow_dispatch:
     inputs:
@@ -59,29 +62,43 @@ jobs:
           python-version: "3.12"
           cache: pip
 
+      # Stdlib only, no dependencies installed yet: decides in about a second
+      # whether this firing has a slot to fill, so redundant runs never pay the
+      # ~70 seconds of Chromium install.
+      - name: Is there a slot to fill?
+        id: precheck
+        if: github.event_name == 'schedule'
+        run: python -m scraper.precheck
+
       - name: Cache Chromium
+        if: github.event_name != 'schedule' || steps.precheck.outputs.proceed == 'true'
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
 
       - name: Install Python dependencies
+        if: github.event_name != 'schedule' || steps.precheck.outputs.proceed == 'true'
         run: pip install -r requirements.txt
 
       # --with-deps shells out to apt, which on a runner with a held dpkg lock
       # can hang for many minutes. Cap it and fall back to the browser binary
       # alone, since the runner image already carries the shared libraries.
       - name: Install Chromium with system libraries
+        if: github.event_name != 'schedule' || steps.precheck.outputs.proceed == 'true'
         id: browser_with_deps
         continue-on-error: true
         timeout-minutes: 6
         run: python -m playwright install --with-deps chromium
 
       - name: Install Chromium without apt
-        if: steps.browser_with_deps.outcome != 'success'
+        if: >-
+          (github.event_name != 'schedule' || steps.precheck.outputs.proceed == 'true')
+          && steps.browser_with_deps.outcome != 'success'
         run: python -m playwright install chromium
 
       - name: Scrape and send report
+        if: github.event_name != 'schedule' || steps.precheck.outputs.proceed == 'true'
         env:
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
@@ -100,7 +117,9 @@ jobs:
 
       - name: Commit today's readings
         # Dev pushes would otherwise litter the history with off-schedule rows.
-        if: github.event_name != 'push'
+        if: >-
+          github.event_name != 'push'
+          && (github.event_name != 'schedule' || steps.precheck.outputs.proceed == 'true')
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

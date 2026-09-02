@@ -61,6 +61,24 @@ def status_of(available: int | None, raw_status: str = "") -> tuple[str, str]:
     return "充足", INK_SECONDARY
 
 
+def coverage_note(covered_hours: Sequence[int]) -> str | None:
+    """Say how many of the day's slots actually got a reading, if any are missing.
+
+    GitHub drops scheduled runs, sometimes for a whole day. A silently short
+    chart would look like the ramp had no data; naming the gap makes it obvious
+    that the scheduler, not the parking lot, was the thing that went quiet.
+    """
+    expected = list(range(config.FIRST_HOUR, config.LAST_HOUR + 1))
+    missing = [h for h in expected if h not in set(covered_hours)]
+    if not missing:
+        return f"今日 {len(expected)} 个档位全部记录成功。"
+    names = "、".join(f"{h if h <= 12 else h - 12}{'am' if h < 12 else 'pm'}" for h in missing)
+    return (
+        f"今日只记录到 {len(expected) - len(missing)}/{len(expected)} 档，"
+        f"缺 {names}（GitHub 定时任务未触发，不是车位数据有问题）。"
+    )
+
+
 def build_html(
     records: Sequence[LotRecord],
     observed_at: dt.datetime,
@@ -68,6 +86,7 @@ def build_html(
     is_final: bool,
     chart_cid: str | None = None,
     series: Sequence[tuple[dt.datetime, int]] = (),
+    covered_hours: Sequence[int] = (),
 ) -> str:
     focus = find_focus(records)
     parts: list[str] = [
@@ -114,6 +133,11 @@ def build_html(
         )
         if series:
             parts.append(_series_table(series))
+        note = coverage_note(covered_hours) if covered_hours else None
+        if note:
+            parts.append(
+                f'<div style="margin-top:10px;font-size:12px;color:{INK_MUTED}">{note}</div>'
+            )
 
     parts.append(
         f'<div style="margin-top:26px;font-size:12px;color:{INK_MUTED};'
