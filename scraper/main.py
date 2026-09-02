@@ -5,10 +5,11 @@ a window wide enough to cover both US Central offsets, and this module decides i
 campus local time whether the run belongs to the 8am-4pm reporting window.
 Daylight saving then needs no cron edit.
 
-The workflow also fires at :41 of the previous hour rather than on the hour,
-because GitHub's scheduler runs 11-36 minutes late on the free tier. Which hour
-a run reports on is therefore its slot (nearest hour), not its clock hour —
-see scraper/schedule.py.
+The workflow fires redundantly (three times an hour) because GitHub drops
+scheduled runs outright, and arrives late by anything from minutes to hours.
+Which hour a run reports on is therefore its slot (nearest hour), not its clock
+hour, and the first arrival for a slot claims it — see scraper/schedule.py and
+scraper/precheck.py.
 """
 
 from __future__ import annotations
@@ -34,7 +35,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--force",
         action="store_true",
-        help="run even outside the weekday 8am-4pm window",
+        help="run even outside the window, and even if this slot was already reported",
     )
     parser.add_argument(
         "--force-chart",
@@ -69,6 +70,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 0
 
+    # The schedule fires redundantly because GitHub drops scheduled runs; the
+    # later arrivals for a slot must not scrape the site again or send a second
+    # email. Checked before fetching, so a redundant run costs the source site
+    # nothing.
+    if not args.force and storage.slot_already_recorded(slot):
+        print(f"slot {slot:%H:00} already reported today; nothing to do")
+        return 0
+
     try:
         html = fetch_html()
         records = parse_lots(html)
@@ -88,7 +97,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     chart_cid: str | None = None
     series: list[tuple[dt.datetime, int]] = []
 
+    covered: list[int] = []
     if is_final:
+        covered = [s.hour for s in storage.recorded_slots(slot.date())]
         series = storage.series_for_lot(slot.date(), config.FOCUS_LOT)
         focus = report.find_focus(records)
         if series:
@@ -111,6 +122,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         is_final=is_final,
         chart_cid=chart_cid,
         series=series,
+        covered_hours=covered,
     )
 
     if args.dry_run:

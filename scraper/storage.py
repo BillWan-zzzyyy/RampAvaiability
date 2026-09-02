@@ -129,6 +129,29 @@ def series_for_lot(
     return [(slot, value) for slot, (_, value) in sorted(by_slot.items())]
 
 
+def slot_already_recorded(
+    slot: dt.datetime,
+    data_dir: pathlib.Path | None = None,
+) -> bool:
+    """True when this reporting slot already has readings on disk.
+
+    The schedule fires several redundant times per hour because GitHub drops
+    scheduled runs, so the second and later arrivals for one slot must do
+    nothing: no scrape, no duplicate email.
+    """
+    return any(
+        (sample.slot or slot_for(sample.observed_at)) == slot
+        for sample in load_day(slot.date(), data_dir)
+    )
+
+
+def recorded_slots(day: dt.date, data_dir: pathlib.Path | None = None) -> list[dt.datetime]:
+    """Every slot that has readings for a day, in order."""
+    return sorted(
+        {sample.slot or slot_for(sample.observed_at) for sample in load_day(day, data_dir)}
+    )
+
+
 def latest_round(samples: Sequence[Sample]) -> list[LotRecord]:
     """The records from the most recent observation in ``samples``."""
     if not samples:
