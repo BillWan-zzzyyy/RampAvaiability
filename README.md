@@ -158,3 +158,29 @@ python -m scraper.main --dry-run --force   # 真抓一次但不发邮件（需�
 - 网站自己声明空位数是**近似值且变化很快**，仅供参考。
 - 抓取或解析失败时会照常发一封"本次抓取失败 + 错误原因"的邮件，并让这次 Actions 运行显示为红色失败，
   **绝不会编造数字**。
+
+
+### October 28, 2026 source migration
+
+The legacy occupancy page now states: “The real-time availability app is currently
+unavailable” and directs visitors to https://map.wisc.edu/. There is no occupancy
+table in the retrieved HTML. Run 214 failed during parsing, after Chromium installed
+successfully; its logs do not contain the response body, so its exact response cannot
+be reconstructed.
+
+Collection now uses https://map.wisc.edu/api/v1/parking, the GeoJSON endpoint used by
+the official map's parking layer. Counts were cross-checked against its
+`/api/v1/parking/spots` refresh endpoint. The captured fixture contains 16 locations,
+13 numeric counts, and 3 null counts. Null remains unknown, never zero. Lot 6 is now
+one combined entry rather than 6L/6U; region is not supplied and remains blank.
+The API supplies no observation timestamp: CSV times remain retrieval times.
+
+The fetcher retries HTTP, JSON and schema failures and requires usable counts and
+the configured focus lot before writing data. Historical CSV files, scheduling,
+slot deduplication, email delivery and charts are unchanged. Report source links
+now point to the campus map. `MAP_API_URL` overrides the feed; `SOURCE_URL` remains
+available for the legacy HTML diagnostic tool. Pushes to main run tests and a live
+dry run (no email or committed readings); scheduled runs retain normal behavior.
+
+Validation: `python -m pytest -q`; live check without email or production records:
+`DATA_DIR=/tmp/parking-check python -m scraper.main --dry-run --force --force-chart`.

@@ -20,9 +20,10 @@ import sys
 from collections.abc import Sequence
 
 from . import chart, config, mailer, report, schedule, storage
-from .fetch import FetchError, fetch_html
+from .fetch import FetchError
+from .map_source import fetch_map_lots
 from .models import LotRecord
-from .parse import ParseError, parse_lots
+from .parse import ParseError
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -79,8 +80,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     try:
-        html = fetch_html()
-        records = parse_lots(html)
+        records = fetch_map_lots()
     except (FetchError, ParseError) as exc:
         print(f"FAILED: {exc}", file=sys.stderr)
         if not args.dry_run:

@@ -143,7 +143,7 @@ def build_html(
         f'<div style="margin-top:26px;font-size:12px;color:{INK_MUTED};'
         f"border-top:1px solid {GRIDLINE};padding-top:12px\">"
         f"数据来源："
-        f'<a href="{html.escape(config.SOURCE_URL)}" style="color:{ACCENT}">'
+        f'<a href="{html.escape(config.REPORT_SOURCE_URL)}" style="color:{ACCENT}">'
         f"UW–Madison Transportation Services</a><br>"
         f"网站说明：空位数为近似值，可能快速变化。"
         f"</div></div>"
@@ -221,6 +221,6 @@ def build_failure_html(error: str, observed_at: dt.datetime) -> str:
         f'<pre style="white-space:pre-wrap;font-size:13px;color:{INK_SECONDARY};'
         f'background:#f3f2ef;padding:12px;border-radius:6px">{html.escape(error)}</pre>'
         f'<div style="font-size:13px;color:{INK_SECONDARY}">'
-        f'可以直接打开 <a href="{html.escape(config.SOURCE_URL)}" '
+        f'可以直接打开 <a href="{html.escape(config.REPORT_SOURCE_URL)}" '
         f'style="color:{ACCENT}">官网页面</a> 手动查看。</div></div>'
     )

@@ -12,6 +12,9 @@ SOURCE_URL = os.environ.get(
     "https://transportation.wisc.edu/parking-lots/lot-occupancy-count/",
 )
 
+MAP_API_URL = os.environ.get("MAP_API_URL", "https://map.wisc.edu/api/v1/parking")
+REPORT_SOURCE_URL = "https://map.wisc.edu/"
+
 # Campus local time. Every hour decision is made in this zone so the schedule
 # survives daylight saving transitions without touching the cron expression.
 TIMEZONE = ZoneInfo(os.environ.get("TIMEZONE", "America/Chicago"))

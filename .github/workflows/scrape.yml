@@ -35,9 +35,10 @@ on:
   # Development only: pushes to the working branch do a dry run so the scraper
   # can be exercised end-to-end before the workflow lands on the default branch.
   push:
-    branches: [claude/parking-lot-scraper-t7lzxw]
+    branches: [main, claude/parking-lot-scraper-t7lzxw]
     paths:
       - "scraper/**"
+      - "tests/**"
       - requirements.txt
       - .github/workflows/scrape.yml
 
@@ -80,6 +81,12 @@ jobs:
       - name: Install Python dependencies
         if: github.event_name != 'schedule' || steps.precheck.outputs.proceed == 'true'
         run: pip install -r requirements.txt
+
+      - name: Run regression tests
+        if: github.event_name != 'schedule' || steps.precheck.outputs.proceed == 'true'
+        run: |
+          pip install pytest
+          python -m pytest -q
 
       # --with-deps shells out to apt, which on a runner with a held dpkg lock
       # can hang for many minutes. Cap it and fall back to the browser binary
